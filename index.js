@@ -200,10 +200,9 @@ async function infiniteCraftBot() {
 
   while (true) {
     await checkPause();
-    checkForNewItems();
 
-    // Phase 1: Click random items (2 to 500 times)
-    const numClicks = Math.floor(Math.random() * 499) + 2;
+    // Phase 1: Click random items (50 to 100 times)
+    const numClicks = Math.floor(Math.random() * 51) + 50;
     ui.log(`[Phase 1] Clicking ${numClicks} items...`);
     for (let i = 0; i < numClicks; i++) {
       await checkPause();
@@ -217,7 +216,6 @@ async function infiniteCraftBot() {
     }
 
     await checkPause();
-    checkForNewItems();
 
     // Phase 2: Drag instances on the board together
     const dragMultiplier = 0.4 + Math.random() * 0.1; // Random between 0.4 and 0.5
@@ -251,6 +249,7 @@ async function infiniteCraftBot() {
 
       await simulateDragAndDrop(el1, el2);
       await wait(getRandomWait());
+      checkForNewItems();
     }
 
     // Phase 3: Clear screen (1 in 2 chance)
