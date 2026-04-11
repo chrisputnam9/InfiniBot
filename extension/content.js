@@ -1,5 +1,6 @@
 (function() {
   let isRunning = false;
+  let currentPhase = 'Pausing';
   let ui;
   const seenItems = new Set();
   let overlay;
@@ -18,7 +19,7 @@
     Object.assign(overlay.style, {
       position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
       backgroundColor: 'rgba(0, 0, 0, 0.4)', zIndex: '999998', display: 'none',
-      pointerEvents: 'none' // allow clicks to pass through if needed, but visually cover
+      pointerEvents: 'auto' // block interactions with main page when visible
     });
     document.body.appendChild(overlay);
 
@@ -54,6 +55,7 @@
       btn.innerHTML = isRunning ? '🤖 ⏸️ Pause' : '🤖 ▶️ Play';
       btn.style.background = isRunning ? '#e6ffe6' : '#f9f9f9';
       overlay.style.display = isRunning ? 'block' : 'none';
+      if (ui) ui.setPhase(isRunning ? currentPhase : 'Pausing');
     };
 
     headerRow.appendChild(title);
@@ -80,9 +82,9 @@
       return { wrap, logArea, label };
     };
 
-    const generalLog = createLogBox('📜 General Log');
+    const generalLog = createLogBox('📜 General Log (Pausing)');
     const itemsLog = createLogBox('🆕 New Items This Session (0)');
-    const discLog = createLogBox('✨ All First Discoveries (0)');
+    const discLog = createLogBox('✨ All First Discoveries (0 - 0 this session)');
 
     const totalLabel = document.createElement('div');
     totalLabel.style.marginTop = '10px';
@@ -109,12 +111,17 @@
     };
 
     return { 
+      setPhase: (phase) => {
+        if (generalLog && generalLog.label) {
+          generalLog.label.innerText = `📜 General Log (${phase})`;
+        }
+      },
       log: (msg, color) => addLog(generalLog.logArea, msg, color),
       logItem: (msg) => addLog(itemsLog.logArea, msg),
       logDiscovery: (msg) => addLog(discLog.logArea, msg),
-      updateCounts: (sessionNew, totalDisc, totalItems) => {
+      updateCounts: (sessionNew, totalDisc, sessionDisc, totalItems) => {
         itemsLog.label.innerText = `🆕 New Items This Session (${sessionNew})`;
-        discLog.label.innerText = `✨ All First Discoveries (${totalDisc})`;
+        discLog.label.innerText = `✨ All First Discoveries (${totalDisc} - ${sessionDisc} this session)`;
         totalLabel.innerText = `Total Items Found: ${totalItems}`;
       }
     };
@@ -128,9 +135,10 @@
 
     let sessionNewCount = 0;
     let totalDiscoveryCount = 0;
+    let sessionDiscoveryCount = 0;
 
     const refreshStats = () => {
-      ui.updateCounts(sessionNewCount, totalDiscoveryCount, seenItems.size);
+      ui.updateCounts(sessionNewCount, totalDiscoveryCount, sessionDiscoveryCount, seenItems.size);
     };
 
     const wait = async (ms) => {
@@ -172,6 +180,7 @@
           
           if (el.innerHTML.includes('First Discovery') || el.classList.contains('item-discovery')) {
              totalDiscoveryCount++;
+             sessionDiscoveryCount++;
              ui.logDiscovery(`${emoji} ${text}`);
           }
           refreshStats();
@@ -202,6 +211,8 @@
       await checkPause();
 
       // Phase 1: Click random items (50 to 100 times)
+      currentPhase = 'Clicking';
+      ui.setPhase('Clicking');
       const numClicks = Math.floor(Math.random() * 51) + 50;
       ui.log(`[Phase 1] Clicking ${numClicks} items...`);
       for (let i = 0; i < numClicks; i++) {
@@ -218,7 +229,9 @@
       await checkPause();
 
       // Phase 2: Drag instances on the board together
-      const dragMultiplier = 0.4 + Math.random() * 0.1; // Random between 0.4 and 0.5
+      currentPhase = 'Dragging';
+      ui.setPhase('Dragging');
+      const dragMultiplier = 0.8 + Math.random() * 0.1; // Random between 0.8 and 0.9
       const dragCount = Math.floor(numClicks * dragMultiplier);
       ui.log(`[Phase 2] Dragging ${dragCount} items...`);
       for (let i = 0; i < dragCount; i++) {
@@ -255,6 +268,8 @@
       // Phase 3: Clear screen (1 in 2 chance)
       if (Math.random() < 0.5) {
         await checkPause();
+        currentPhase = 'Clearing';
+        ui.setPhase('Clearing');
         ui.log("Clearing canvas...");
         const clearIcon = document.querySelector('.clear.tool-icon') || document.querySelector('[data-tooltip="Clear Canvas"]');
         if (clearIcon) {
