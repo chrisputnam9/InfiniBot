@@ -4,6 +4,7 @@
   const STORE_NAME = "combinations";
 
   let isRunning = false;
+  let isHovered = false;
   let currentPhase = "Pausing";
   let ui;
   const seenItems = new Map(); // Store item text -> { emoji, text }
@@ -185,6 +186,7 @@
         let foundB = false;
 
         for (const candB of sidebarItems) {
+          await checkPause();
           const combo = await getCombination(db, candidateA, candB.text);
           if (combo === undefined) {
             const aItem = sidebarItems.find((i) => i.text === candidateA);
@@ -211,6 +213,7 @@
       for (let i = currentAIndex; i < sidebarItems.length; i++) {
         const candA = sidebarItems[i];
         for (let j = i; j < sidebarItems.length; j++) {
+          await checkPause();
           const candB = sidebarItems[j];
           const combo = await getCombination(db, candA.text, candB.text);
           if (combo === undefined) {
@@ -240,6 +243,7 @@
       ui.log(`Could not find element for ${itemA.text} to click`, "red");
       return;
     }
+    await checkPause();
     simulateClick(itemA.el, false);
     await wait(100);
 
@@ -250,6 +254,7 @@
       ui.log(`Could not find element for ${itemB.text} to click`, "red");
       return;
     }
+    await checkPause();
     simulateClick(itemB.el, false);
     await wait(100);
 
@@ -257,6 +262,7 @@
     if (instances.length >= 2) {
       const el1 = instances[instances.length - 2];
       const el2 = instances[instances.length - 1];
+      await checkPause();
       await simulateDragAndDrop(el1, el2);
 
       // Wait for craft to process
@@ -316,6 +322,7 @@
       document.querySelector(".clear.tool-icon") ||
       document.querySelector('[data-tooltip="Clear Canvas"]');
     if (clearBtn) {
+      await checkPause();
       simulateClick(clearBtn, false);
       await wait(50);
       const yesBtn = document.querySelector(".action-btn.action-danger");
@@ -455,9 +462,11 @@
   }
 
   async function checkPause() {
-    if (!isRunning) {
+    if (!isRunning || isHovered) {
       showGameModals();
-      while (!isRunning) await wait(500);
+      while (!isRunning || isHovered) {
+        await wait(100);
+      }
       hideGameModals();
     }
   }
@@ -598,6 +607,17 @@
       document.getElementById("infinibot-overlay").remove();
     }
 
+    const style = document.createElement("style");
+    style.innerHTML = `
+      @keyframes infinibot-blink {
+        50% { opacity: 0.3; }
+      }
+      .infinibot-blinking {
+        animation: infinibot-blink 1s infinite;
+      }
+    `;
+    document.head.appendChild(style);
+
     // Create overlay
     overlay = document.createElement("div");
     overlay.id = "infinibot-overlay";
@@ -633,16 +653,36 @@
       fontFamily: "sans-serif",
       fontSize: "12px",
       color: "#cdd6f4",
-      opacity: "0.2",
-      transition: "opacity 0.2s ease-in-out",
+      opacity: "0.7",
+      transition: "opacity 0.4s ease-in-out",
     });
 
     container.addEventListener("mouseenter", () => {
-      container.style.opacity = "0.9";
+      container.style.opacity = "0.95";
+      isHovered = true;
+      updateHoverUI();
     });
     container.addEventListener("mouseleave", () => {
-      container.style.opacity = "0.2";
+      container.style.opacity = "0.7";
+      isHovered = false;
+      updateHoverUI();
     });
+
+    const updateHoverUI = () => {
+      const phaseSuffix = isRunning && isHovered ? " - Hover Paused" : "";
+      const phaseText = isRunning ? currentPhase : "Pausing";
+      if (generalLog && generalLog.label) {
+        generalLog.label.innerText = `📜 General Log (${phaseText}${phaseSuffix})`;
+      }
+
+      if (isRunning && isHovered) {
+        hoverWarning.style.display = "block";
+        btn.classList.add("infinibot-blinking");
+      } else {
+        hoverWarning.style.display = "none";
+        btn.classList.remove("infinibot-blinking");
+      }
+    };
 
     const headerRow = document.createElement("div");
     Object.assign(headerRow.style, {
@@ -676,22 +716,27 @@
       btn.innerHTML = isRunning ? "🤖 ⏸️ Pause" : "🤖 ▶️ Play";
       btn.style.background = isRunning ? "#a6e3a1" : "#313244";
       btn.style.color = isRunning ? "#11111b" : "#cdd6f4";
-      
+
       overlay.style.display = isRunning ? "block" : "none";
 
-      if (isRunning) {
-        hideGameModals();
-      }
-
-      if (ui) ui.setPhase(isRunning ? currentPhase : "Pausing");
-
-      // Toggle focus area disabled state
-      focusInput.disabled = isRunning;
-      focusInput.title = isRunning ? "Pause to edit focus area" : "";
+      updateHoverUI();
     };
 
     headerRow.appendChild(title);
     headerRow.appendChild(btn);
+
+    // Hover Warning
+    const hoverWarning = document.createElement("div");
+    hoverWarning.innerText = "⚠️ Hovering: Move mouse off window to resume";
+    Object.assign(hoverWarning.style, {
+      color: "#f38ba8",
+      fontSize: "11px",
+      fontWeight: "bold",
+      textAlign: "center",
+      marginBottom: "5px",
+      display: "none",
+    });
+    container.appendChild(hoverWarning);
 
     // Focus Area Row
     const focusRow = document.createElement("div");
@@ -855,9 +900,8 @@
 
     return {
       setPhase: (phase) => {
-        if (generalLog && generalLog.label) {
-          generalLog.label.innerText = `📜 General Log (${phase})`;
-        }
+        currentPhase = phase;
+        updateHoverUI();
       },
       log: (msg, color) => addLog(generalLog.logArea, msg, color),
       logItem: (msg) => addLog(itemsLog.logArea, msg),
